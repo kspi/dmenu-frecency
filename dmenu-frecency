@@ -25,6 +25,13 @@ import json
 CONFIG_DIR = xdg.BaseDirectory.save_config_path('dmenu-frecency')
 
 
+# Python 2 compatibility
+try:
+    FileNotFoundError
+except NameError:
+    FileNotFoundError = IOError
+
+
 def newer_than(a, b):
     return os.path.getmtime(a) > os.path.getmtime(b)
 
