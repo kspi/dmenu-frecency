@@ -7,6 +7,8 @@ Firefox sorts its location bar suggestions.
 If no application title matches the input, it it executed as a shell command
 (and saved for later suggestions).
 
+![Screenshot](http://i.imgur.com/UqwtAGL.png)
+
 ## Requirements
 
 Python, pyxdg and dmenu.
