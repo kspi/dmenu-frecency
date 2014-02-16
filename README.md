@@ -12,11 +12,11 @@ If no application title matches the input, it it executed as a shell command
 
 ## Requirements
 
-Python, pyxdg and dmenu.
+Python, pyxdg, docopt and dmenu.
 
 ## Configuration
 
 On first launch a `config.json` is saved in `~/.config/dmenu-frecency` (or
 wherever `XDG_CONFIG_PATH` is) where dmenu's command line and some other
 options can be customized. The application cache is updated every
-`cache-days`.
+`cache-days` or if `--read-apps` is passed on the command line.
