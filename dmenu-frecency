@@ -1,0 +1,210 @@
+#!/usr/bin/env python
+"""Dmenu launcher with history sorted by frecency.
+
+Usage:
+    dmenu-frecency [--read-apps]
+
+Options:
+    --read-apps         rereads all .desktop files.
+"""
+
+from docopt import docopt
+import os
+import sys
+import xdg.BaseDirectory
+from xdg.DesktopEntry import DesktopEntry
+from subprocess import Popen, PIPE
+from datetime import datetime
+from collections import defaultdict
+import pickle
+import re
+import gzip
+import json
+
+
+CONFIG_DIR = xdg.BaseDirectory.save_config_path('dmenu-frecency')
+
+
+def newer_than(a, b):
+    return os.path.getmtime(a) > os.path.getmtime(b)
+
+
+class BadDesktopFile(Exception):
+    pass
+
+
+class NoDisplayApplication(Exception):
+    pass
+
+
+class Application:
+    def __init__(self, name, command, mtime=None, path=None, frecency=0):
+        self.name = name
+        self.command = command
+        self.path = path
+        if mtime is None:
+            self.mtime = datetime.now()
+        else:
+            self.mtime = mtime
+
+    def run(self):
+        if os.fork() == 0:
+            if self.path:
+                os.chdir(self.path)
+            os.execvp('sh', ['sh', '-c', 'exec ' + self.command])
+
+    def __lt__(self, other):
+        return self.mtime < other.mtime
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class LauncherState:
+    EXEC_CODES_RE = re.compile(r'\s*%[fFuU]')
+    STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
+
+    def __init__(self):
+        self.find_apps()
+        self.apps_generated_at = datetime.now()
+        self.last_visits = 10
+        self.visits = defaultdict(list)
+        self.visit_count = defaultdict(int)
+        self.frecencies = {}
+
+    def apps_by_frecency(self):
+        x = [app for app, f in sorted(self.frecencies.items(), key=lambda x: (-x[1], x[0]))]
+        x.extend(app for app in sorted(self.apps.values(), reverse=True) if app not in self.frecencies)
+        return x
+
+    def add_visit(self, app):
+        vs = self.visits[app]
+        now = datetime.now()
+        vs.append(now)
+        self.visit_count[app] += 1
+        self.visits[app] = vs[-self.last_visits:]
+        self.frecencies[app] = self.frecency(app)
+
+    def frecency(self, app):
+        points = 0
+        for v in self.visits[app]:
+            days_ago = (datetime.now() - v).days
+            if days_ago < 4:
+                points += 100
+            elif days_ago < 14:
+                points += 70
+            elif days_ago < 31:
+                points += 50
+            elif days_ago < 90:
+                points += 30
+            else:
+                points += 10
+
+        return int(self.visit_count[app] * points / len(self.visits[app]))
+
+    @classmethod
+    def load(cls):
+        try:
+            with gzip.open(cls.STATE_FILENAME, 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            return cls()
+
+    def save(self):
+        with gzip.open(self.STATE_FILENAME, 'wb', 3) as f:
+            pickle.dump(self, f)
+
+    def find_apps(self):
+        self.apps = {}
+        for applications_directory in xdg.BaseDirectory.load_data_paths("applications"):
+            if os.path.exists(applications_directory):
+                for dirpath, dirnames, filenames in os.walk(applications_directory):
+                    for f in filenames:
+                        if f.endswith('.desktop'):
+                            full_filename = os.path.join(dirpath, f)
+                            self.add_desktop(full_filename)
+
+
+    def add_desktop(self, filename):
+        try:
+            d = DesktopEntry(filename)
+            if d.getHidden() or d.getNoDisplay() or d.getTerminal() or d.getType() != 'Application':
+                return
+            name = d.getName()
+            app = Application(
+                    name=name,
+                    command=self.EXEC_CODES_RE.sub('', d.getExec()),
+                    mtime=datetime.fromtimestamp(os.path.getmtime(filename)))
+            if d.getPath():
+                app.path = d.getPath()
+            self.apps[name] = app
+        except (xdg.Exceptions.ParsingError,
+                xdg.Exceptions.DuplicateGroupError,
+                xdg.Exceptions.DuplicateKeyError):
+            pass
+
+class DmenuFrecency:
+    CONFIG_FILENAME = os.path.join(CONFIG_DIR, 'config.json')
+    DEFAULT_CONFIG = {
+        'dmenu': 'dmenu',
+        'dmenu-args': ['-i'],
+        'cache-days': 1,
+        'frecency-visits': 10,
+    }
+
+    def __init__(self, arguments):
+        self.read_apps = arguments['--read-apps']
+
+        self.state = LauncherState.load()
+        if self.read_apps:
+            self.state.find_apps()
+
+        self.config = getattr(self.state, 'config', None)
+
+        if not self.config or newer_than(self.CONFIG_FILENAME, LauncherState.STATE_FILENAME):
+            self.load_config()
+            self.state.config = self.config
+
+        self.state.last_visits = self.config['frecency-visits']
+
+    def load_config(self):
+        try:
+            with open(self.CONFIG_FILENAME, 'r') as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            self.config = self.DEFAULT_CONFIG
+            with open(self.CONFIG_FILENAME, 'w') as f:
+                json.dump(self.config, f, sort_keys=True, indent=4)
+
+    def main(self):
+        dmenu = Popen([self.config['dmenu']] + self.config['dmenu-args'], stdin=PIPE, stdout=PIPE)
+        for app in self.state.apps_by_frecency():
+            dmenu.stdin.write(app.name.encode('utf-8'))
+            dmenu.stdin.write(b'\n')
+        stdout, stderr = dmenu.communicate()
+        result = stdout.decode('utf-8').strip()
+
+        if not result:
+            return
+
+        if result in self.state.apps:
+            app = self.state.apps[result]
+        else:
+            app = Application(
+                    name=result,
+                    command=result)
+
+        self.state.add_visit(app)
+        app.run()
+
+        if not self.read_apps and (datetime.now() - self.state.apps_generated_at).days >= self.config['cache-days']:
+            self.state.find_apps()
+        self.state.save()
+
+
+if __name__ == '__main__':
+    arguments = docopt(__doc__, version="0.1")
+    DmenuFrecency(arguments).main()
