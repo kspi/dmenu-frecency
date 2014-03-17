@@ -45,7 +45,7 @@ class NoDisplayApplication(Exception):
 
 
 class Application:
-    def __init__(self, name, command, mtime=None, path=None, frecency=0):
+    def __init__(self, name, command, mtime=None, path=None, desktop=False):
         self.name = name
         self.command = command
         self.path = path
@@ -64,10 +64,13 @@ class Application:
         return self.mtime < other.mtime
 
     def __eq__(self, other):
-        return self.name == other.name
+        return self.command == other.command
 
     def __hash__(self):
-        return hash(self.name)
+        return hash(self.command)
+
+    def __str__(self):
+        return "<Application: {} ({})>".format(self.name, self.command)
 
 STATE_VERSION = 1
 
@@ -155,7 +158,8 @@ class LauncherState:
             app = Application(
                     name=name,
                     command=self.EXEC_CODES_RE.sub('', d.getExec()),
-                    mtime=datetime.fromtimestamp(os.path.getmtime(filename)))
+                    mtime=datetime.fromtimestamp(os.path.getmtime(filename)),
+                    desktop=True)
             if d.getPath():
                 app.path = d.getPath()
             self.apps[name] = app
@@ -163,6 +167,11 @@ class LauncherState:
                 xdg.Exceptions.DuplicateGroupError,
                 xdg.Exceptions.DuplicateKeyError):
             pass
+
+    def clean_cache(self):
+        for app in self.frecency_cache.keys():
+            if app.desktop and app.name not in self.apps:
+                del self.frecency_cache[app]
 
 class DmenuFrecency:
     CONFIG_FILENAME = os.path.join(CONFIG_DIR, 'config.json')
@@ -179,6 +188,7 @@ class DmenuFrecency:
         self.state = LauncherState.load()
         if self.read_apps:
             self.state.find_apps()
+            self.clean_cache()
 
         self.load_config()
         self.state.last_visits = self.config['frecency-visits']
@@ -215,8 +225,9 @@ class DmenuFrecency:
         self.state.add_visit(app)
         self.update_frecencies()
 
-        if not self.read_apps and (datetime.now() - self.state.apps_generated_at).days >= self.config['cache-days']:
+        if (datetime.now() - self.state.apps_generated_at).days >= self.config['cache-days']:
             self.state.find_apps()
+            self.clean_cache()
         self.state.save()
 
 
