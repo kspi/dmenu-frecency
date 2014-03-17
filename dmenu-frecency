@@ -180,12 +180,7 @@ class DmenuFrecency:
         if self.read_apps:
             self.state.find_apps()
 
-        self.config = getattr(self.state, 'config', None)
-
-        if not self.config or newer_than(self.CONFIG_FILENAME, LauncherState.STATE_FILENAME):
-            self.load_config()
-            self.state.config = self.config
-
+        self.load_config()
         self.state.last_visits = self.config['frecency-visits']
 
     def load_config(self):
