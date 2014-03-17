@@ -82,11 +82,11 @@ class LauncherState:
         self.last_visits = 10
         self.visits = defaultdict(list)
         self.visit_count = defaultdict(int)
-        self.frecencies = {}
+        self.frecency_cache = {}
 
     def apps_by_frecency(self):
-        x = [app for app, f in sorted(self.frecencies.items(), key=lambda x: (-x[1], x[0]))]
-        x.extend(app for app in sorted(self.apps.values(), reverse=True) if app not in self.frecencies)
+        x = [app for app, f in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0]))]
+        x.extend(app for app in sorted(self.apps.values(), reverse=True) if app not in self.frecency_cache)
         return x
 
     def add_visit(self, app):
@@ -95,7 +95,10 @@ class LauncherState:
         vs.append(now)
         self.visit_count[app] += 1
         self.visits[app] = vs[-self.last_visits:]
-        self.frecencies[app] = self.frecency(app)
+    
+    def update_frecencies(self):
+        for app in self.visits.keys():
+            self.frecency_cache[app] = self.frecency(app)
 
     def frecency(self, app):
         points = 0
@@ -212,8 +215,10 @@ class DmenuFrecency:
                     name=result,
                     command=result)
 
-        self.state.add_visit(app)
         app.run()
+
+        self.state.add_visit(app)
+        self.update_frecencies()
 
         if not self.read_apps and (datetime.now() - self.state.apps_generated_at).days >= self.config['cache-days']:
             self.state.find_apps()
