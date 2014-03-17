@@ -69,12 +69,14 @@ class Application:
     def __hash__(self):
         return hash(self.name)
 
+STATE_VERSION = 1
 
 class LauncherState:
     EXEC_CODES_RE = re.compile(r'\s*%[fFuU]')
     STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
 
     def __init__(self):
+        self.version = STATE_VERSION
         self.find_apps()
         self.apps_generated_at = datetime.now()
         self.last_visits = 10
@@ -116,7 +118,13 @@ class LauncherState:
     def load(cls):
         try:
             with gzip.open(cls.STATE_FILENAME, 'rb') as f:
-                return pickle.load(f)
+                obj = pickle.load(f)
+            if getattr(obj, 'version', 0) < STATE_VERSION:
+                new_obj = cls()
+                new_obj.visit_count = obj.visit_count
+                new_obj.visits = obj.visits
+                new_obj.update_frecencies()
+                return new_obj
         except FileNotFoundError:
             return cls()
 
