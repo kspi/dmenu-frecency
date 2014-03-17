@@ -139,6 +139,8 @@ class LauncherState:
                 new_obj.clean_cache()
                 new_obj.update_frecencies()
                 return new_obj
+            else:
+                return obj
         except FileNotFoundError:
             return cls()
 
@@ -194,6 +196,7 @@ class DmenuFrecency:
         self.read_apps = arguments['--read-apps']
 
         self.state = LauncherState.load()
+        assert self.state, "Failed to load state."
         if self.read_apps:
             self.state.find_apps()
             self.state.clean_cache()
