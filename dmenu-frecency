@@ -206,13 +206,8 @@ class DmenuFrecency:
 
     def __init__(self, arguments):
         self.read_apps = arguments['--read-apps']
-
         self.state = LauncherState.load()
         assert self.state, "Failed to load state."
-        if self.read_apps:
-            self.state.find_apps()
-            self.state.clean_cache()
-
         self.load_config()
         self.state.last_visits = self.config['frecency-visits']
 
@@ -226,6 +221,12 @@ class DmenuFrecency:
                 json.dump(self.config, f, sort_keys=True, indent=4)
 
     def main(self):
+        if self.read_apps:
+            self.state.find_apps()
+            self.state.clean_cache()
+            self.state.save()
+            return
+
         dmenu = Popen([self.config['dmenu']] + self.config['dmenu-args'], stdin=PIPE, stdout=PIPE)
         for app in self.state.apps_by_frecency():
             dmenu.stdin.write(app.name.encode('utf-8'))
