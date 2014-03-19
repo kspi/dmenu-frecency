@@ -159,13 +159,25 @@ class LauncherState:
     def find_apps(self):
         self.apps = {}
         self.command_apps = {}
-        for applications_directory in xdg.BaseDirectory.load_data_paths("applications"):
-            if os.path.exists(applications_directory):
-                for dirpath, dirnames, filenames in os.walk(applications_directory):
-                    for f in filenames:
-                        if f.endswith('.desktop'):
-                            full_filename = os.path.join(dirpath, f)
-                            self.add_desktop(full_filename)
+        if self.scan_desktop_files:
+            for applications_directory in xdg.BaseDirectory.load_data_paths("applications"):
+                if os.path.exists(applications_directory):
+                    for dirpath, dirnames, filenames in os.walk(applications_directory):
+                        for f in filenames:
+                            if f.endswith('.desktop'):
+                                full_filename = os.path.join(dirpath, f)
+                                self.add_desktop(full_filename)
+        if self.scan_path:
+            for pathdir in os.environ["PATH"].split(os.pathsep):
+                pathdir = pathdir.strip('"')
+                for f in os.listdir(pathdir):
+                    filename = os.path.join(pathdir, f)
+                    if os.path.isfile(filename) and os.access(filename, os.X_OK):
+                        app = Application(
+                                name=f,
+                                command=f,
+                                mtime=datetime.fromtimestamp(os.path.getmtime(filename)))
+                        self.add_app(app)
         self.sorted_apps = sorted(self.apps.values(), reverse=True)
 
     def add_desktop(self, filename):
@@ -181,13 +193,16 @@ class LauncherState:
                     is_desktop=True)
             if d.getPath():
                 app.path = d.getPath()
-            if app.command not in self.command_apps:
-                self.apps[name] = app
-                self.command_apps[app.command] = app
+            self.add_app(app)
         except (xdg.Exceptions.ParsingError,
                 xdg.Exceptions.DuplicateGroupError,
                 xdg.Exceptions.DuplicateKeyError):
             pass
+
+    def add_app(self, app):
+        if app.command not in self.command_apps:
+            self.apps[app.name] = app
+            self.command_apps[app.command] = app
 
     def clean_cache(self):
         for app in list(self.frecency_cache.keys()):
@@ -201,6 +216,8 @@ class DmenuFrecency:
         'dmenu-args': ['-i'],
         'cache-days': 1,
         'frecency-visits': 10,
+        'scan-desktop-files': True,
+        'scan-path': False,
     }
     NAME_WITH_COMMAND = re.compile(r"(.+) \([^()]+\)")
 
@@ -210,6 +227,8 @@ class DmenuFrecency:
         assert self.state, "Failed to load state."
         self.load_config()
         self.state.last_visits = self.config['frecency-visits']
+        self.state.scan_desktop_files = self.config['scan-desktop-files']
+        self.state.scan_path = self.config['scan-path']
 
     def load_config(self):
         try:
