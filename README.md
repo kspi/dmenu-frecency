@@ -7,6 +7,8 @@ sorts its location bar suggestions.
 If no application title matches the input, it it executed as a shell command
 (and saved for later suggestions).
 
+It scans XDG desktop files and optionally executables from PATH (off by default).
+
 ![Screenshot](http://i.imgur.com/UqwtAGL.png)
 
 ## Requirements
@@ -19,3 +21,5 @@ On first launch a `config.json` is saved in `~/.config/dmenu-frecency` (or
 wherever `XDG_CONFIG_PATH` is) where dmenu's command line and some other
 options can be customized. The application cache is updated every
 `cache-days` or if `--read-apps` is passed on the command line.
+
+PATH scanning can by activated with the "scan-path" option.
