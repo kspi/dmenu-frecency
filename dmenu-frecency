@@ -50,6 +50,7 @@ class Application:
         self.command = command
         self.path = path
         self.is_desktop = is_desktop
+        self.show_command = False
         if mtime is None:
             self.mtime = datetime.now()
         else:
@@ -65,15 +66,15 @@ class Application:
         return self.mtime < other.mtime
 
     def __eq__(self, other):
-        return self.command == other.command
+        return self.name == other.name
 
     def __hash__(self):
-        return hash(self.command)
+        return hash(self.name)
 
     def __str__(self):
         return "<Application: {} ({})>".format(self.name, self.command)
 
-STATE_VERSION = 2
+STATE_VERSION = 3
 
 class LauncherState:
     EXEC_CODES_RE = re.compile(r'\s*%[fFuU]')
@@ -89,11 +90,18 @@ class LauncherState:
         self.frecency_cache = {}
 
     def apps_by_frecency(self):
-        x = [app for app, f in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0]))]
-        x.extend(app for app in sorted(self.apps.values(), reverse=True) if app not in self.frecency_cache)
-        return x
+        for app, frec in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0])):
+            yield app
+        for app in self.sorted_apps:
+            if app not in self.frecency_cache:
+                yield app
 
     def add_visit(self, app):
+        if not app.is_desktop and app.command in self.command_apps:
+            app = self.command_apps[app.command]
+            app.show_command = True
+        if app.is_desktop:
+            self.sorted_apps.remove(app)
         vs = self.visits[app]
         now = datetime.now()
         vs.append(now)
@@ -150,6 +158,7 @@ class LauncherState:
 
     def find_apps(self):
         self.apps = {}
+        self.command_apps = {}
         for applications_directory in xdg.BaseDirectory.load_data_paths("applications"):
             if os.path.exists(applications_directory):
                 for dirpath, dirnames, filenames in os.walk(applications_directory):
@@ -157,7 +166,7 @@ class LauncherState:
                         if f.endswith('.desktop'):
                             full_filename = os.path.join(dirpath, f)
                             self.add_desktop(full_filename)
-
+        self.sorted_apps = sorted(self.apps.values(), reverse=True)
 
     def add_desktop(self, filename):
         try:
@@ -172,7 +181,9 @@ class LauncherState:
                     is_desktop=True)
             if d.getPath():
                 app.path = d.getPath()
-            self.apps[name] = app
+            if app.command not in self.command_apps:
+                self.apps[name] = app
+                self.command_apps[app.command] = app
         except (xdg.Exceptions.ParsingError,
                 xdg.Exceptions.DuplicateGroupError,
                 xdg.Exceptions.DuplicateKeyError):
@@ -191,6 +202,7 @@ class DmenuFrecency:
         'cache-days': 1,
         'frecency-visits': 10,
     }
+    NAME_WITH_COMMAND = re.compile(r"(.+) \([^()]+\)")
 
     def __init__(self, arguments):
         self.read_apps = arguments['--read-apps']
@@ -217,6 +229,8 @@ class DmenuFrecency:
         dmenu = Popen([self.config['dmenu']] + self.config['dmenu-args'], stdin=PIPE, stdout=PIPE)
         for app in self.state.apps_by_frecency():
             dmenu.stdin.write(app.name.encode('utf-8'))
+            if app.show_command:
+                dmenu.stdin.write(" ({})".format(app.command).encode('utf-8'))
             dmenu.stdin.write(b'\n')
         stdout, stderr = dmenu.communicate()
         result = stdout.decode('utf-8').strip()
@@ -227,9 +241,13 @@ class DmenuFrecency:
         if result in self.state.apps:
             app = self.state.apps[result]
         else:
-            app = Application(
-                    name=result,
-                    command=result)
+            m = self.NAME_WITH_COMMAND.match(result)
+            if m and m.group(1) in self.state.apps:
+                app = self.state.apps[m.group(1)]
+            else:
+                app = Application(
+                        name=result,
+                        command=result)
 
         app.run()
 
