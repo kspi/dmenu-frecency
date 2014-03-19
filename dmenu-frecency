@@ -63,7 +63,7 @@ class Application:
             os.execvp('sh', ['sh', '-c', 'exec ' + self.command])
 
     def __lt__(self, other):
-        return self.mtime < other.mtime
+        return (self.is_desktop, self.mtime) < (other.is_desktop, other.mtime)
 
     def __eq__(self, other):
         return self.name == other.name
