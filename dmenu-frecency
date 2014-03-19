@@ -80,11 +80,11 @@ class LauncherState:
     EXEC_CODES_RE = re.compile(r'\s*%[fFuU]')
     STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
 
-    def __init__(self):
+    def __init__(self, config):
         self.version = STATE_VERSION
+        self.config = config
         self.find_apps()
         self.apps_generated_at = datetime.now()
-        self.last_visits = 10
         self.visits = defaultdict(list)
         self.visit_count = defaultdict(int)
         self.frecency_cache = {}
@@ -100,13 +100,15 @@ class LauncherState:
         if not app.is_desktop and app.command in self.command_apps:
             app = self.command_apps[app.command]
             app.show_command = True
-        if app.is_desktop:
+        try:
             self.sorted_apps.remove(app)
+        except ValueError:
+            pass # not in list
         vs = self.visits[app]
         now = datetime.now()
         vs.append(now)
         self.visit_count[app] += 1
-        self.visits[app] = vs[-self.last_visits:]
+        self.visits[app] = vs[-self.config['frecency-visits']:]
     
     def update_frecencies(self):
         for app in self.visits.keys():
@@ -130,7 +132,7 @@ class LauncherState:
         return int(self.visit_count[app] * points / len(self.visits[app]))
 
     @classmethod
-    def load(cls):
+    def load(cls, config):
         try:
             with gzip.open(cls.STATE_FILENAME, 'rb') as f:
                 obj = pickle.load(f)
@@ -146,11 +148,13 @@ class LauncherState:
                 new_obj.find_apps()
                 new_obj.clean_cache()
                 new_obj.update_frecencies()
+                new_obj.config = config
                 return new_obj
             else:
+                obj.config = config
                 return obj
         except FileNotFoundError:
-            return cls()
+            return cls(config)
 
     def save(self):
         with gzip.open(self.STATE_FILENAME, 'wb', 3) as f:
@@ -159,7 +163,7 @@ class LauncherState:
     def find_apps(self):
         self.apps = {}
         self.command_apps = {}
-        if self.scan_desktop_files:
+        if self.config['scan-desktop-files']:
             for applications_directory in xdg.BaseDirectory.load_data_paths("applications"):
                 if os.path.exists(applications_directory):
                     for dirpath, dirnames, filenames in os.walk(applications_directory):
@@ -167,7 +171,7 @@ class LauncherState:
                             if f.endswith('.desktop'):
                                 full_filename = os.path.join(dirpath, f)
                                 self.add_desktop(full_filename)
-        if self.scan_path:
+        if self.config['scan-path']:
             for pathdir in os.environ["PATH"].split(os.pathsep):
                 pathdir = pathdir.strip('"')
                 for f in os.listdir(pathdir):
@@ -223,12 +227,9 @@ class DmenuFrecency:
 
     def __init__(self, arguments):
         self.read_apps = arguments['--read-apps']
-        self.state = LauncherState.load()
-        assert self.state, "Failed to load state."
         self.load_config()
-        self.state.last_visits = self.config['frecency-visits']
-        self.state.scan_desktop_files = self.config['scan-desktop-files']
-        self.state.scan_path = self.config['scan-path']
+        self.state = LauncherState.load(self.config)
+        assert self.state, "Failed to load state."
 
     def load_config(self):
         try:
