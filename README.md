@@ -4,6 +4,9 @@ A dmenu-based desktop application launcher that uses a combination of frequency
 and recency to sort the application list. This is similar to the way Firefox
 sorts its location bar suggestions.
 
+Applications that haven't been launched yet are sorted by modification date, so
+the newest ones are at the top.
+
 If no application title matches the input, it it executed as a shell command
 (and saved for later suggestions).
 
