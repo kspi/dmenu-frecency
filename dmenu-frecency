@@ -32,18 +32,6 @@ except NameError:
     FileNotFoundError = IOError
 
 
-def newer_than(a, b):
-    return os.path.getmtime(a) > os.path.getmtime(b)
-
-
-class BadDesktopFile(Exception):
-    pass
-
-
-class NoDisplayApplication(Exception):
-    pass
-
-
 class Application:
     def __init__(self, name, command, mtime=None, path=None, is_desktop=False):
         self.name = name
