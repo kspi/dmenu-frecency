@@ -159,9 +159,13 @@ class LauncherState:
                             if f.endswith('.desktop'):
                                 full_filename = os.path.join(dirpath, f)
                                 self.add_desktop(full_filename)
+
         if self.config['scan-path']:
             for pathdir in os.environ["PATH"].split(os.pathsep):
                 pathdir = pathdir.strip('"')
+                if not os.path.isdir(pathdir):
+                    continue
+
                 for f in os.listdir(pathdir):
                     filename = os.path.join(pathdir, f)
                     if os.path.isfile(filename) and os.access(filename, os.X_OK):
