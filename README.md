@@ -22,7 +22,8 @@ Python, pyxdg, docopt and dmenu.
 
 On first launch a `config.json` is saved in `~/.config/dmenu-frecency` (or
 wherever `XDG_CONFIG_PATH` is) where dmenu's command line and some other
-options can be customized. The application cache is updated every
+options can be customized. The command line arguments are specified as a JSON
+array, for example `["-i", "-b"]`. The application cache is updated every
 `cache-days` or if `--read-apps` is passed on the command line.
 
 PATH scanning can by activated with the "scan-path" option.
