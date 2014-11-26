@@ -65,7 +65,8 @@ class Application:
 STATE_VERSION = 3
 
 class LauncherState:
-    EXEC_CODES_RE = re.compile(r'\s*%[fFuU]')
+    EXEC_CODES_RE = re.compile(r'\s*%[dDnNvmfFuUi%]')
+    EXEC_CODES_RE_CAPTION = re.compile(r'%c')
     STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
 
     def __init__(self, config):
@@ -182,9 +183,11 @@ class LauncherState:
             if d.getHidden() or d.getNoDisplay() or d.getTerminal() or d.getType() != 'Application':
                 return
             name = d.getName()
+            command = self.EXEC_CODES_RE.sub('', d.getExec())
+            command = self.EXEC_CODES_RE_CAPTION.sub(name, command)
             app = Application(
                     name=name,
-                    command=self.EXEC_CODES_RE.sub('', d.getExec()),
+                    command=command,
                     mtime=datetime.fromtimestamp(os.path.getmtime(filename)),
                     is_desktop=True)
             if d.getPath():
