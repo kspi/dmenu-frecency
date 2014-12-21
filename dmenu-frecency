@@ -66,7 +66,7 @@ STATE_VERSION = 3
 
 class LauncherState:
     EXEC_CODES_RE = re.compile(r'\s*%[dDnNvmfFuUi%]')
-    EXEC_CODES_RE_CAPTION = re.compile(r'%c')
+    EXEC_CODES_RE_CAPTION = re.compile(r"[\"']?%c[\"']?")
     STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
 
     def __init__(self, config):
@@ -76,13 +76,18 @@ class LauncherState:
         self.apps_generated_at = datetime.now()
         self.visits = defaultdict(list)
         self.visit_count = defaultdict(int)
+        self.app_last_visit = None
         self.frecency_cache = {}
 
     def apps_by_frecency(self):
+        app_last_visit = self.app_last_visit if self.config['preselect-last-visit'] else None
+        if app_last_visit is not None:
+            yield app_last_visit
         for app, frec in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0])):
-            yield app
+            if app is not app_last_visit:
+                yield app
         for app in self.sorted_apps:
-            if app not in self.frecency_cache:
+            if app is not app_last_visit and app not in self.frecency_cache:
                 yield app
 
     def add_visit(self, app):
@@ -98,6 +103,7 @@ class LauncherState:
         vs.append(now)
         self.visit_count[app] += 1
         self.visits[app] = vs[-self.config['frecency-visits']:]
+        self.app_last_visit = app if self.config['preselect-last-visit'] else None
     
     def update_frecencies(self):
         for app in self.visits.keys():
@@ -184,7 +190,7 @@ class LauncherState:
                 return
             name = d.getName()
             command = self.EXEC_CODES_RE.sub('', d.getExec())
-            command = self.EXEC_CODES_RE_CAPTION.sub(name, command)
+            command = self.EXEC_CODES_RE_CAPTION.sub('"%s"' % name, command)
             app = Application(
                     name=name,
                     command=command,
@@ -215,6 +221,7 @@ class DmenuFrecency:
         'dmenu-args': ['-i'],
         'cache-days': 1,
         'frecency-visits': 10,
+        'preselect-last-visit': False,
         'scan-desktop-files': True,
         'scan-path': False,
     }
