@@ -84,10 +84,10 @@ class LauncherState:
         if app_last_visit is not None:
             yield app_last_visit
         for app, frec in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0])):
-            if app is not app_last_visit:
+            if app != app_last_visit:
                 yield app
         for app in self.sorted_apps:
-            if app is not app_last_visit and app not in self.frecency_cache:
+            if app != app_last_visit and app not in self.frecency_cache:
                 yield app
 
     def add_visit(self, app):
