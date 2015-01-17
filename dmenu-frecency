@@ -84,11 +84,12 @@ class LauncherState:
         if app_last_visit is not None:
             yield app_last_visit
         for app, frec in sorted(self.frecency_cache.items(), key=lambda x: (-x[1], x[0])):
-            if app != app_last_visit:
+            if app_last_visit is None or app_last_visit != app:
                 yield app
         for app in self.sorted_apps:
-            if app != app_last_visit and app not in self.frecency_cache:
-                yield app
+            if app not in self.frecency_cache:
+                if app_last_visit is None or app_last_visit != app:
+                    yield app
 
     def add_visit(self, app):
         if not app.is_desktop and app.command in self.command_apps:
@@ -213,6 +214,8 @@ class LauncherState:
         for app in list(self.frecency_cache.keys()):
             if app.is_desktop and app.name not in self.apps:
                 del self.frecency_cache[app]
+        if self.app_last_visit is not None and self.app_last_visit.name not in self.apps:
+            self.app_last_visit = None
 
 class DmenuFrecency:
     CONFIG_FILENAME = os.path.join(CONFIG_DIR, 'config.json')
