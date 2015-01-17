@@ -237,13 +237,15 @@ class DmenuFrecency:
         assert self.state, "Failed to load state."
 
     def load_config(self):
+        self.config = {}
+        self.config.update(self.DEFAULT_CONFIG)
         try:
             with open(self.CONFIG_FILENAME, 'r') as f:
-                self.config = json.load(f)
+                self.config.update(json.load(f))
         except FileNotFoundError:
-            self.config = self.DEFAULT_CONFIG
             with open(self.CONFIG_FILENAME, 'w') as f:
                 json.dump(self.config, f, sort_keys=True, indent=4)
+                f.write('\n')
 
     def main(self):
         if self.read_apps:
