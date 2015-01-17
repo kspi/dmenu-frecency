@@ -254,8 +254,9 @@ class DmenuFrecency:
 
         dmenu = Popen([self.config['dmenu']] + self.config['dmenu-args'], stdin=PIPE, stdout=PIPE)
         for app in self.state.apps_by_frecency():
-            dmenu.stdin.write(app.name.encode('utf-8'))
-            if app.show_command:
+            app_name = app.name.encode('utf-8')
+            dmenu.stdin.write(app_name)
+            if app.show_command and app_name != app.command:
                 dmenu.stdin.write(" ({})".format(app.command).encode('utf-8'))
             dmenu.stdin.write(b'\n')
         stdout, stderr = dmenu.communicate()
