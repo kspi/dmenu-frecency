@@ -21,6 +21,7 @@ import re
 import gzip
 import json
 import tempfile
+import shlex
 
 
 CONFIG_DIR = xdg.BaseDirectory.save_config_path('dmenu-frecency')
@@ -34,10 +35,10 @@ except NameError:
 
 
 class Application:
-    def __init__(self, name, command, mtime=None, path=None, is_desktop=False):
+    def __init__(self, name, command_line, mtime=None, path=None, is_desktop=False):
         self.name = name
-        self.command = command
         self.path = path
+        self.command_line = command_line
         self.is_desktop = is_desktop
         self.show_command = False
         if mtime is None:
@@ -49,7 +50,7 @@ class Application:
         if os.fork() == 0:
             if self.path:
                 os.chdir(self.path)
-            os.execvp('sh', ['sh', '-c', 'exec ' + self.command])
+            os.execvp(self.command_line[0], self.command_line)
 
     def __lt__(self, other):
         return (self.is_desktop, self.mtime) < (other.is_desktop, other.mtime)
@@ -61,13 +62,38 @@ class Application:
         return hash(self.name)
 
     def __str__(self):
-        return "<Application: {} ({})>".format(self.name, self.command)
+        return "<Application: {} {!r}>".format(self.name, self.command_line)
+
 
 STATE_VERSION = 3
 
+
+def get_command(desktop_entry):
+    tokens = []
+    for token in shlex.split(desktop_entry.getExec()):
+        i = 0
+        newtok = ""
+        nc = len(token)
+        while i < nc:
+            c = token[i]
+            if c == '%' and i < nc - 1:
+                i += 1
+                code = token[i]
+                if code == 'c' and desktop_entry.getName():
+                    newtok += desktop_entry.getName()
+                elif code == 'i' and desktop_entry.getIcon():
+                    newtok += desktop_entry.getIcon()
+                elif code == '%':
+                    newtok += '%'
+            else:
+                newtok += c
+            i += 1
+        if newtok:
+            tokens.append(newtok)
+    return tuple(tokens)
+
+
 class LauncherState:
-    EXEC_CODES_RE = re.compile(r'\s*%[dDnNvmfFuUi%]')
-    EXEC_CODES_RE_CAPTION = re.compile(r"[\"']?%c[\"']?")
     STATE_FILENAME = os.path.join(CONFIG_DIR, 'state')
 
     def __init__(self, config):
@@ -93,8 +119,8 @@ class LauncherState:
                     yield app
 
     def add_visit(self, app):
-        if not app.is_desktop and app.command in self.command_apps:
-            app = self.command_apps[app.command]
+        if not app.is_desktop and app.command_line in self.command_apps:
+            app = self.command_apps[app.command_line]
             app.show_command = True
         try:
             self.sorted_apps.remove(app)
@@ -186,7 +212,7 @@ class LauncherState:
                     if os.path.isfile(filename) and os.access(filename, os.X_OK):
                         app = Application(
                                 name=f,
-                                command=f,
+                                command_line=(f,),
                                 mtime=datetime.fromtimestamp(os.path.getmtime(filename)))
                         self.add_app(app)
         self.sorted_apps = sorted(self.apps.values(), reverse=True)
@@ -196,12 +222,9 @@ class LauncherState:
             d = DesktopEntry(filename)
             if d.getHidden() or d.getNoDisplay() or d.getTerminal() or d.getType() != 'Application':
                 return
-            name = d.getName()
-            command = self.EXEC_CODES_RE.sub('', d.getExec())
-            command = self.EXEC_CODES_RE_CAPTION.sub('"%s"' % name, command)
             app = Application(
-                    name=name,
-                    command=command,
+                    name=d.getName(),
+                    command_line=get_command(d),
                     mtime=datetime.fromtimestamp(os.path.getmtime(filename)),
                     is_desktop=True)
             if d.getPath():
@@ -213,9 +236,9 @@ class LauncherState:
             pass
 
     def add_app(self, app):
-        if app.command not in self.command_apps:
+        if app.command_line not in self.command_apps:
             self.apps[app.name] = app
-            self.command_apps[app.command] = app
+            self.command_apps[app.command_line] = app
 
     def clean_cache(self):
         for app in list(self.frecency_cache.keys()):
@@ -223,6 +246,7 @@ class LauncherState:
                 del self.frecency_cache[app]
         if self.app_last_visit is not None and self.app_last_visit.name not in self.apps:
             self.app_last_visit = None
+
 
 class DmenuFrecency:
     CONFIG_FILENAME = os.path.join(CONFIG_DIR, 'config.json')
@@ -265,8 +289,8 @@ class DmenuFrecency:
         for app in self.state.apps_by_frecency():
             app_name = app.name.encode('utf-8')
             dmenu.stdin.write(app_name)
-            if app.show_command and app_name != app.command:
-                dmenu.stdin.write(" ({})".format(app.command).encode('utf-8'))
+            if app.show_command and app_name != app.command_line[0]:
+                dmenu.stdin.write(" ({})".format(' '.join(app.command_line)).encode('utf-8'))
             dmenu.stdin.write(b'\n')
         stdout, stderr = dmenu.communicate()
         result = stdout.decode('utf-8').strip()
@@ -283,7 +307,7 @@ class DmenuFrecency:
             else:
                 app = Application(
                         name=result,
-                        command=result)
+                        command_line=tuple(shlex.split(result)))
 
         app.run()
 
