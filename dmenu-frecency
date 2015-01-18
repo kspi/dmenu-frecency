@@ -20,6 +20,7 @@ import pickle
 import re
 import gzip
 import json
+import tempfile
 
 
 CONFIG_DIR = xdg.BaseDirectory.save_config_path('dmenu-frecency')
@@ -153,8 +154,14 @@ class LauncherState:
             return cls(config)
 
     def save(self):
-        with gzip.open(self.STATE_FILENAME, 'wb', 3) as f:
-            pickle.dump(self, f)
+        with tempfile.NamedTemporaryFile(
+                'wb',
+                dir=os.path.dirname(self.STATE_FILENAME),
+                delete=False) as tf:
+            with gzip.open(tf, 'wb') as gzipf:
+                pickle.dump(self, gzipf)
+            tempname = tf.name
+        os.rename(tempname, self.STATE_FILENAME)
 
     def find_apps(self):
         self.apps = {}
