@@ -65,7 +65,7 @@ class Application:
         return "<Application: {} {!r}>".format(self.name, self.command_line)
 
 
-STATE_VERSION = 3
+STATE_VERSION = 4
 
 
 def get_command(desktop_entry):
@@ -161,7 +161,7 @@ class LauncherState:
                 obj = pickle.load(f)
             version = getattr(obj, 'version', 0)
             if version < STATE_VERSION:
-                new_obj = cls()
+                new_obj = cls(config)
                 if version <= 1:
                     for app, vs in obj.visits.items():
                         vc = obj.visit_count[app]
