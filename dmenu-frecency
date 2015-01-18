@@ -71,25 +71,27 @@ STATE_VERSION = 4
 def get_command(desktop_entry):
     tokens = []
     for token in shlex.split(desktop_entry.getExec()):
-        i = 0
-        newtok = ""
-        nc = len(token)
-        while i < nc:
-            c = token[i]
-            if c == '%' and i < nc - 1:
+        if token == '%i' and desktop_entry.getIcon():
+            tokens.append('--icon')
+            tokens.append(desktop_entry.getIcon())
+        else:
+            i = 0
+            newtok = ""
+            nc = len(token)
+            while i < nc:
+                c = token[i]
+                if c == '%' and i < nc - 1:
+                    i += 1
+                    code = token[i]
+                    if code == 'c' and desktop_entry.getName():
+                        newtok += desktop_entry.getName()
+                    elif code == '%':
+                        newtok += '%'
+                else:
+                    newtok += c
                 i += 1
-                code = token[i]
-                if code == 'c' and desktop_entry.getName():
-                    newtok += desktop_entry.getName()
-                elif code == 'i' and desktop_entry.getIcon():
-                    newtok += desktop_entry.getIcon()
-                elif code == '%':
-                    newtok += '%'
-            else:
-                newtok += c
-            i += 1
-        if newtok:
-            tokens.append(newtok)
+            if newtok:
+                tokens.append(newtok)
     return tuple(tokens)
 
 
