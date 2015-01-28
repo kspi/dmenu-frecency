@@ -292,7 +292,7 @@ class DmenuFrecency:
         for app in self.state.apps_by_frecency():
             app_name = app.name.encode('utf-8')
             dmenu.stdin.write(app_name)
-            if app.show_command and app_name != app.command_line[0]:
+            if app.show_command and app.name != app.command_line[0]:
                 dmenu.stdin.write(" ({})".format(' '.join(app.command_line)).encode('utf-8'))
             dmenu.stdin.write(b'\n')
         stdout, stderr = dmenu.communicate()
