@@ -187,9 +187,9 @@ class LauncherState:
                 'wb',
                 dir=os.path.dirname(self.STATE_FILENAME),
                 delete=False) as tf:
-            with gzip.open(tf, 'wb') as gzipf:
-                pickle.dump(self, gzipf)
             tempname = tf.name
+            with gzip.open(tempname, 'wb') as gzipf:
+                pickle.dump(self, gzipf)
         os.rename(tempname, self.STATE_FILENAME)
 
     def find_apps(self):
