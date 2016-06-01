@@ -235,8 +235,9 @@ class LauncherState:
             self.add_app(app)
         except (xdg.Exceptions.ParsingError,
                 xdg.Exceptions.DuplicateGroupError,
-                xdg.Exceptions.DuplicateKeyError):
-            pass
+                xdg.Exceptions.DuplicateKeyError,
+                ValueError) as e:
+            sys.stderr.write("Failed to parse desktop file '{}': {!r}\n".format(filename, e))
 
     def add_app(self, app):
         if app.command_line not in self.command_apps:
