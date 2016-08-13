@@ -50,7 +50,7 @@ class Application:
         if os.fork() == 0:
             if self.path:
                 os.chdir(self.path)
-            os.execvp(self.command_line[0], self.command_line)
+            os.execvp(os.path.expanduser(self.command_line[0]), self.command_line)
 
     def __lt__(self, other):
         return (self.is_desktop, self.mtime) < (other.is_desktop, other.mtime)
